@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>com.plexapp.plugins.drtest</string>
+  <string>com.plexapp.plugins.tv3playdk</string>
   <key>PlexAudioCodec</key>
   <array>
     <string>AAC</string>
