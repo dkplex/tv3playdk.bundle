@@ -266,13 +266,13 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
                 duration    = duration, 
                 originally_available_at = date,
                 rating      = rating,
-                rating_key  = rating,
-                key         = url,
+                rating_key  = url,
+                key         = Callback(Lookup, url = url, rating_key = url),
                 items       = [
                         MediaObject(
                             parts = [
                                 PartObject(
-                                    key      = url,
+                                    key      = RTMPVideoURL(url = url),
                                     duration = duration
                                 )
                             ]
@@ -281,6 +281,30 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
     )
     
     return video
+
+####################################################################################################
+
+def Lookup(url, rating_key):
+  
+  # create object container
+  oc = ObjectContainer()
+  
+  # create and add movieobj
+  oc.add(MovieObject(
+    key         = Callback(Lookup, url = url, rating_key = rating_key),
+    rating_key  = rating_key,
+    items       = [ 
+             MediaObject(
+                parts = [
+                    PartObject(
+                        key    = RTMPVideoURL(url = url)
+                    )
+                ]
+            )
+    ]
+  ))
+
+  return oc
 
 ####################################################################################################
 
