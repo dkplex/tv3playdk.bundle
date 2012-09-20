@@ -110,11 +110,24 @@ def BrowsePrograms(title):
         # set variables
         url       = program.get('href')
         name      = program.text_content()
+            
+        # get season/clip table list
+        id = HTML.ElementFromURL(PATH + url, cacheTime=CACHE_1HOUR).xpath('.//div[@id="main-content"]/div/div/table/tbody//tr/th[@class="col1"]/a')[0].get('href').split('/')[2]
         
+        # get video xml
+        xml = GetVideoXML(id)
+        
+        # skip program if problems with xml
+        if not xml: continue
+    
+        # set variables
+        thumb = GetThumb(xml, 'PlayImage')
+    
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseSeasons, url = url, title = name),
                 title       = name,
-                thumb       = R(ICON)
+                art         = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ART)),
+                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))
         ))
 
     return oc
@@ -337,6 +350,10 @@ def GetThumb(xml, type='Boxart_small'):
 
 def GetVideoXML(id):
     
-    return XML.ElementFromURL(PATH_INFO + id).xpath('//Product')[0]
-  
+    try:
+        xml = XML.ElementFromURL(PATH_INFO + id)
+        return xml.xpath('//Product')[0]
+    except:
+        xml = XML.ElementFromURL('http://viastream.player.mtgnewmedia.se/xml/xmltoplayer.php?type=Products&category=' + id)
+        return False
 ####################################################################################################
