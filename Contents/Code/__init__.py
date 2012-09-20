@@ -110,12 +110,12 @@ def BrowsePrograms(title):
         # set variables
         url       = program.get('href')
         name      = program.text_content()
-        thumb     = ''
         
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseSeasons, url = url, title = name),
                 title       = name,
-                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))))
+                thumb       = R(ICON)
+        ))
 
     return oc
 
@@ -134,6 +134,15 @@ def BrowseSeasons(url, title):
     
     # get seasons
     seasons = table[0].xpath('.//tr[contains(@class, "season-head")]')
+
+    # find video id
+    id = table[0].xpath('.//tr/th[@class="col1"]/a')[0].get('href').split('/')[2]
+    
+    # get video xml
+    xml = GetVideoXML(id)
+    
+    # set variables
+    thumb = GetThumb(xml, 'PlayImage')
     
     # run through seasons
     for num in range(len(seasons)):
@@ -145,14 +154,15 @@ def BrowseSeasons(url, title):
         url         = url
         name        = season.xpath('.//td/a/strong')[0].text_content()
         summary     = '%s af %s' % (season.xpath('.//td/a/strong')[0].text_content(), title)
-        thumb       = ''
         seasonid    = season.get('class').split(' ')[len(season.get('class').split(' '))-1].split('-')[1]
         
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseVideos, url = url,  title = '%s - %s' % (title, name), season = seasonid),
                 title       = name,
                 summary     = summary,
-                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))))
+                art         = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ART)),
+                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))
+        ))
      
     # get clips
     clips = table[1].xpath('.//tr[contains(@class, "season-head")]')
@@ -167,14 +177,15 @@ def BrowseSeasons(url, title):
         url         = url
         name        = 'Klip fra ' + clip.xpath('.//td/a/strong')[0].text_content()
         summary     = 'Klip fra %s af %s' % (clip.xpath('.//td/a/strong')[0].text_content(), title)
-        thumb       = ''
         seasonid    = clip.get('class').split(' ')[len(clip.get('class').split(' '))-1].split('-')[1]
         
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseVideos, url = url, title = '%s - %s' % (title, name), season = seasonid, clips = True),
                 title       = name,
                 summary     = summary,
-                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))))
+                art         = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ART)),
+                thumb       = Resource.ContentsOfURLWithFallback(thumb,fallback=R(ICON))
+        ))
       
     return oc
 
@@ -242,6 +253,7 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
     # set variables
     date        = Datetime.ParseDate(xml.findtext('BroadcastDate'))
     summary     = xml.findtext('LongDescription')
+    art         = GetThumb(xml, 'PlayImage')
     thumb       = GetThumb(xml)
     url         = GetVideo(xml)
         
@@ -249,6 +261,7 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
     video = VideoClipObject(
                 title       = title, 
                 summary     = summary, 
+                art         = Resource.ContentsOfURLWithFallback(art, fallback=R(ART)),
                 thumb       = Resource.ContentsOfURLWithFallback(thumb, fallback=R(ICON)),
                 duration    = duration, 
                 originally_available_at = date,
@@ -285,12 +298,12 @@ def GetVideo(xml):
 
 ####################################################################################################
 
-def GetThumb(xml):
+def GetThumb(xml, type='Boxart_small'):
     
     url = ''
     
     for node in xml.findall('Images/ImageMedia'):
-        if node.findtext('Usage') == 'Boxart_small':
+        if node.findtext('Usage') == type:
             url = node.findtext('Url')
             break
     
@@ -299,7 +312,7 @@ def GetThumb(xml):
 ####################################################################################################
 
 def GetVideoXML(id):
-     
+    
     return XML.ElementFromURL(PATH_INFO + id).xpath('//Product')[0]
   
 ####################################################################################################
