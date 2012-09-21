@@ -112,16 +112,16 @@ def BrowsePrograms(title):
         name      = program.text_content()
             
         # get season/clip table list
-        id = HTML.ElementFromURL(PATH + url, cacheTime=CACHE_1HOUR).xpath('.//div[@id="main-content"]/div/div/table/tbody//tr/th[@class="col1"]/a')[0].get('href').split('/')[2]
+        #id = HTML.ElementFromURL(PATH + url, cacheTime=CACHE_1HOUR).xpath('.//div[@id="main-content"]/div/div/table/tbody//tr/th[@class="col1"]/a')[0].get('href').split('/')[2]
         
         # get video xml
-        xml = GetVideoXML(id)
+        #xml = GetVideoXML(id)
         
         # skip program if problems with xml
-        if not xml: continue
+        #if not xml: continue
     
         # set variables
-        thumb = GetThumb(xml, 'PlayImage')
+        thumb = ''#GetThumb(xml, 'PlayImage')
     
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseSeasons, url = url, title = name),
@@ -269,9 +269,19 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
     art         = GetThumb(xml, 'PlayImage')
     thumb       = GetThumb(xml)
     url         = GetVideo(xml)
+    
+    if xml.find('AdCalls/preroll') is not None:
+        pre_ad_url = xml.find('AdCalls/preroll').get('url')
+    else:
+        pre_ad_url = ''
         
+    if xml.find('AdCalls/postroll') is not None:
+        post_ad_url = xml.find('AdCalls/postroll').get('url')
+    else:
+        post_ad_url = ''
+    
     # create video object
-    video = VideoClipObject(
+    video_obj = VideoClipObject(
                 title       = title, 
                 summary     = summary, 
                 art         = Resource.ContentsOfURLWithFallback(art, fallback=R(ART)),
@@ -280,44 +290,82 @@ def CreateVideoObj(id, title, duration=0, rating=0.0):
                 originally_available_at = date,
                 rating      = rating,
                 rating_key  = url,
-                key         = Callback(Lookup, url = url, rating_key = url),
-                items       = [
-                        MediaObject(
-                            parts = [
-                                PartObject(
-                                    key      = RTMPVideoURL(url = url),
-                                    duration = duration
-                                )
-                            ]
-                        )
-                ]
+                key         = Callback(Lookup, url = url, pre_ad_url = pre_ad_url, post_ad_url = post_ad_url, rating_key = url)
     )
+    media_obj = MediaObject()
     
-    return video
+    # add post ad to media
+    if pre_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
+        media_obj.add(CreateAdPart(pre_ad_url))
+        
+    # add main video part to media
+    media_obj.add(CreatePart(url))
+    
+    # add post ad to media
+    if post_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
+        media_obj.add(CreateAdPart(post_ad_url))
+    
+    # add media to video
+    video_obj.add(media_obj)
+    
+    return video_obj
 
 ####################################################################################################
 
-def Lookup(url, rating_key):
-  
-  # create object container
-  oc = ObjectContainer()
-  
-  # create and add movieobj
-  oc.add(MovieObject(
-    key         = Callback(Lookup, url = url, rating_key = rating_key),
-    rating_key  = rating_key,
-    items       = [ 
-             MediaObject(
-                parts = [
-                    PartObject(
-                        key    = RTMPVideoURL(url = url)
-                    )
-                ]
-            )
-    ]
-  ))
+def CreatePart(url):
+    
+    part_obj = PartObject(
+            key = RTMPVideoURL(url = url)
+    )
+    
+    return part_obj            
 
-  return oc
+####################################################################################################
+
+def CreateAdPart(url):
+    
+    ad_url = XML.ElementFromURL(url).findtext('Ad/InLine/Creatives/Creative/Linear/MediaFiles/MediaFile')
+    
+    part_obj = PartObject(
+            key = RTMPVideoURL(url = ad_url)
+    )
+    
+    return part_obj            
+
+####################################################################################################    
+
+def Lookup(url, pre_ad_url, post_ad_url, rating_key):
+  
+    # create object container
+    oc = ObjectContainer()
+  
+    # create movieobj
+    movie_obj = MovieObject(
+            key         = Callback(Lookup, url = url, pre_ad_url = pre_ad_url, post_ad_url = post_ad_url, rating_key = rating_key),
+            rating_key  = rating_key
+    )
+  
+    # create mediaobj
+    media_obj = MediaObject()
+    
+    # add pre ad to media
+    if pre_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
+        media_obj.add(CreateAdPart(pre_ad_url))
+         
+    # add main video part to media
+    media_obj.add(CreatePart(url))
+     
+    # add post ad to media
+    if post_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
+        media_obj.add(CreateAdPart(post_ad_url))
+    
+    # add media to video
+    movie_obj.add(media_obj)
+    
+    # add movie to object container
+    oc.add(movie_obj)
+    
+    return oc
 
 ####################################################################################################
 
