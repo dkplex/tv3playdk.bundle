@@ -10,7 +10,7 @@
   <string>2</string>
   <key>PlexFrameworkFlags</key>
   <array>
-  <string>UseRealRTMP</string>
+    <string>UseRealRTMP</string>
   </array>
 </dict>
 </plist>

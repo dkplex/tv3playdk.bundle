@@ -110,18 +110,7 @@ def BrowsePrograms(title):
         # set variables
         url       = program.get('href')
         name      = program.text_content()
-            
-        # get season/clip table list
-        #id = HTML.ElementFromURL(PATH + url, cacheTime=CACHE_1HOUR).xpath('.//div[@id="main-content"]/div/div/table/tbody//tr/th[@class="col1"]/a')[0].get('href').split('/')[2]
-        
-        # get video xml
-        #xml = GetVideoXML(id)
-        
-        # skip program if problems with xml
-        #if not xml: continue
-    
-        # set variables
-        thumb = ''#GetThumb(xml, 'PlayImage')
+        thumb     = ''
     
         # add directory to container
         oc.add(DirectoryObject(key = Callback(BrowseSeasons, url = url, title = name),
@@ -234,9 +223,13 @@ def BrowseVideos(url, title, season, clips=False):
         if "season-head" in video.get('class'): continue
         if not 'season-' + season in video.get('class'): continue
         
-        # find video id
-        id = video.xpath('.//th[@class="col1"]/a')[0].get('href').split('/')[2]
+        # find video url / id
+        url = video.xpath('.//th[@class="col1"]/a')[0].get('href')
+        id = url.split('/')[2]
         
+        # get video xml
+        xml = GetVideoXML(id)
+    
         # create title based on season or clip
         if clips:
             name = '%s' % (video.xpath('.//th[@class="col1"]/a')[0].text_content())
@@ -244,142 +237,28 @@ def BrowseVideos(url, title, season, clips=False):
             name = '%s episode %s' % (video.xpath('.//th[@class="col1"]/a')[0].text_content(), video.xpath('.//td[@class="col2"]')[0].text_content())
         
         # set variables
+        date        = Datetime.ParseDate(xml.findtext('BroadcastDate'))
+        summary     = xml.findtext('LongDescription')
+        art         = GetThumb(xml, 'PlayImage')
+        thumb       = GetThumb(xml)    
         duration    = video.xpath('.//td[@class="col3"]')[0].text_content()
         duration    = int(int(duration[0:2])*60 + int(duration[3:5])) * 1000
         rating      = float(video.xpath('.//td[@class="col5"]/form/div')[0].get('class').split(' ')[1].split('-')[1]) * 2
-        
-        # create video object
-        video = CreateVideoObj(id, name, duration, rating)
+    
+        # create video object from URL Service
+        video_obj = VideoClipObject(url = PATH + url, 
+                                    title = name, 
+                                    summary = summary, 
+                                    rating = rating,
+                                    art = Resource.ContentsOfURLWithFallback(art, fallback=R(ART)),
+                                    thumb = Resource.ContentsOfURLWithFallback(thumb, fallback=R(ICON)),
+                                    originally_available_at = date,
+                                    duration = duration)
         
         # add video to container
-        oc.add(video)
+        oc.add(video_obj)
         
     return oc
-
-####################################################################################################
-
-def CreateVideoObj(id, title, duration=0, rating=0.0):
-
-    # get video xml
-    xml = GetVideoXML(id)
-    
-    # set variables
-    date        = Datetime.ParseDate(xml.findtext('BroadcastDate'))
-    summary     = xml.findtext('LongDescription')
-    art         = GetThumb(xml, 'PlayImage')
-    thumb       = GetThumb(xml)
-    url         = GetVideo(xml)
-    
-    if xml.find('AdCalls/preroll') is not None:
-        pre_ad_url = xml.find('AdCalls/preroll').get('url')
-    else:
-        pre_ad_url = ''
-        
-    if xml.find('AdCalls/postroll') is not None:
-        post_ad_url = xml.find('AdCalls/postroll').get('url')
-    else:
-        post_ad_url = ''
-    
-    # create video object
-    video_obj = VideoClipObject(
-                title       = title, 
-                summary     = summary, 
-                art         = Resource.ContentsOfURLWithFallback(art, fallback=R(ART)),
-                thumb       = Resource.ContentsOfURLWithFallback(thumb, fallback=R(ICON)),
-                duration    = duration, 
-                originally_available_at = date,
-                rating      = rating,
-                rating_key  = url,
-                key         = Callback(Lookup, url = url, pre_ad_url = pre_ad_url, post_ad_url = post_ad_url, rating_key = url)
-    )
-    media_obj = MediaObject()
-    
-    # add post ad to media
-    if pre_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
-        media_obj.add(CreateAdPart(pre_ad_url))
-        
-    # add main video part to media
-    media_obj.add(CreatePart(url))
-    
-    # add post ad to media
-    if post_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
-        media_obj.add(CreateAdPart(post_ad_url))
-    
-    # add media to video
-    video_obj.add(media_obj)
-    
-    return video_obj
-
-####################################################################################################
-
-def CreatePart(url):
-    
-    part_obj = PartObject(
-            key = RTMPVideoURL(url = url)
-    )
-    
-    return part_obj            
-
-####################################################################################################
-
-def CreateAdPart(url):
-    
-    ad_url = XML.ElementFromURL(url).findtext('Ad/InLine/Creatives/Creative/Linear/MediaFiles/MediaFile')
-    
-    part_obj = PartObject(
-            key = RTMPVideoURL(url = ad_url)
-    )
-    
-    return part_obj            
-
-####################################################################################################    
-
-def Lookup(url, pre_ad_url, post_ad_url, rating_key):
-  
-    # create object container
-    oc = ObjectContainer()
-  
-    # create movieobj
-    movie_obj = MovieObject(
-            key         = Callback(Lookup, url = url, pre_ad_url = pre_ad_url, post_ad_url = post_ad_url, rating_key = rating_key),
-            rating_key  = rating_key
-    )
-  
-    # create mediaobj
-    media_obj = MediaObject()
-    
-    # add pre ad to media
-    if pre_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
-        media_obj.add(CreateAdPart(pre_ad_url))
-         
-    # add main video part to media
-    media_obj.add(CreatePart(url))
-     
-    # add post ad to media
-    if post_ad_url is not '' and Client.Platform <> ClientPlatform.iOS:
-        media_obj.add(CreateAdPart(post_ad_url))
-    
-    # add media to video
-    movie_obj.add(media_obj)
-    
-    # add movie to object container
-    oc.add(movie_obj)
-    
-    return oc
-
-####################################################################################################
-
-def GetVideo(xml):
-    
-    url = ''
-    
-    node = xml.find('Videos/Video')
-    url = node.findtext('Url')
-    
-    new_xml = XML.ElementFromURL(url).xpath('//GeoLock')[0]
-    url = new_xml.findtext('Url')
-    
-    return url;
 
 ####################################################################################################
 
